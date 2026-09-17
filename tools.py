@@ -8,7 +8,7 @@ otonom olarak çalıştırıp sonuçları analiz edebilmesi için gerekli araç 
 import os
 import sys
 import subprocess
-from typing import Tuple
+from typing import Tuple, List
 
 def read_file(file_path: str) -> str:
     """
@@ -36,11 +36,24 @@ def write_file(file_path: str, content: str) -> None:
         f.write(content)
 
 
-def run_pytest(test_file_path: str) -> Tuple[bool, str]:
+def get_python_files(target_dir: str) -> List[str]:
+    """
+    Hedef dizindeki tüm Python dosyalarını listeler (test dosyaları hariç).
+    """
+    py_files = []
+    for root, _, files in os.walk(target_dir):
+        for file in files:
+            if file.endswith(".py") and not file.startswith("test_") and not file.startswith("__"):
+                py_files.append(os.path.join(root, file))
+    return py_files
+
+
+def run_pytest(test_file_path: str, timeout: int = 30) -> Tuple[bool, str]:
     """
     Belirtilen pytest test dosyasını bir alt süreç (subprocess) olarak çalıştırır.
     
     :param test_file_path: Çalıştırılacak unit test dosya yolu
+    :param timeout: Zaman aşımı süresi (saniye)
     :return: (is_passed: bool, output_log: str) ikilisi
              is_passed True ise tüm testler başarıyla geçmiş demektir.
     """
@@ -53,12 +66,12 @@ def run_pytest(test_file_path: str) -> Tuple[bool, str]:
             [sys.executable, "-m", "pytest", test_file_path, "-v", "--tb=short"],
             capture_output=True,
             text=True,
-            timeout=30
+            timeout=timeout
         )
         is_passed = (result.returncode == 0)
         output = result.stdout + "\n" + result.stderr
         return is_passed, output.strip()
     except subprocess.TimeoutExpired:
-        return False, "Test çalıştırma zaman aşımına uğradı (Timeout 30s)."
+        return False, f"Test çalıştırma zaman aşımına uğradı (Timeout {timeout}s)."
     except Exception as e:
         return False, f"Test çalıştırılırken beklenmeyen bir hata oluştu: {str(e)}"
