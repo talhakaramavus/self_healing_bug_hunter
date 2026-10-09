@@ -5,7 +5,12 @@ This module tests the core data models, tools, and report exporters.
 """
 
 import os
+import sys
 import pytest
+
+# Ensure parent directory is in sys.path for cross-platform imports in CI environments
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
+
 from config import BugReport, TestReproduction, FixResult, VerificationResult
 from tools import read_file, write_file, get_python_files
 from reporter import BugReporter

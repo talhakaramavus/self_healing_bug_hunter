@@ -10,6 +10,8 @@ on:
 jobs:
   autonomous-bug-hunt:
     runs-on: ubuntu-latest
+    env:
+      PYTHONPATH: .
 
     steps:
     - name: Checkout repository
@@ -27,7 +29,7 @@ jobs:
 
     - name: Run Framework Unit Tests
       run: |
-        pytest tests/test_bug_hunter.py -v
+        python -m pytest tests/test_bug_hunter.py -v
 
     - name: Run 4-Agent Bug Hunter Pipeline
       env:
@@ -36,6 +38,7 @@ jobs:
         python main.py --export-reports --export-benchmark
 
     - name: Archive Bug Hunter Artifacts
+      if: always()
       uses: actions/upload-artifact@v4
       with:
         name: bug-hunter-reports
