@@ -1,0 +1,44 @@
+name: Self-Healing Bug Hunter CI
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+  workflow_dispatch:
+
+jobs:
+  autonomous-bug-hunt:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Set up Python 3.12
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.12'
+
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install google-genai pytest
+
+    - name: Run Framework Unit Tests
+      run: |
+        pytest tests/test_bug_hunter.py -v
+
+    - name: Run 4-Agent Bug Hunter Pipeline
+      env:
+        GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+      run: |
+        python main.py --export-reports --export-benchmark
+
+    - name: Archive Bug Hunter Artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: bug-hunter-reports
+        path: |
+          bug_hunter_report.*
+          benchmark_report.*
