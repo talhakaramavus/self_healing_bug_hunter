@@ -1,9 +1,8 @@
 """
-benchmark.py - Self-Healing Bug Hunter Performans ve Değerlendirme Modülü (Benchmark)
+benchmark.py - Self-Healing Bug Hunter Benchmark & Performance Evaluation Module
 
-Bu modül; Gerçek Pozitif Hataları (True-Positives), Yanlış Alarmları (False Alarms), 
-Yama Kabul Oranını (Patch Acceptance Rate %), Tahmini Token Maliyetini ($) 
-ve Tamir Süresini (Time-to-Fix) hesaplar ve raporlar.
+This module measures True-Positives, False Alarms, Patch Acceptance Rate (%), 
+Estimated Token Costs ($), and Time-to-Fix latency.
 """
 
 import time
@@ -14,7 +13,7 @@ from tools import write_file
 
 @dataclass
 class BenchmarkMetrics:
-    """Benchmark değerlendirme metrikleri modeli."""
+    """Benchmark evaluation metrics model."""
     total_bugs_scanned: int
     true_positives: int
     false_alarms: int
@@ -25,16 +24,16 @@ class BenchmarkMetrics:
 
 class BugHunterBenchmark:
     """
-    BugHunterBenchmark: Sistem başarısını sayısal metriklerle ölçen benchmark sınıfı.
+    BugHunterBenchmark: Evaluates system performance with quantitative metrics.
     """
 
-    ESTIMATED_INPUT_COST_PER_1K = 0.00015   # Gemini 2.5 Flash tahmini token fiyatı
+    ESTIMATED_INPUT_COST_PER_1K = 0.00015   # Gemini 2.5 Flash estimated token pricing
     ESTIMATED_OUTPUT_COST_PER_1K = 0.00060
 
     @staticmethod
     def evaluate(results: List[Dict[str, Any]], total_duration_seconds: float) -> BenchmarkMetrics:
         """
-        İşlem sonuçlarını analiz ederek benchmark metriklerini hesaplar.
+        Analyzes pipeline results to calculate benchmark metrics.
         """
         total_bugs = len(results)
         if total_bugs == 0:
@@ -48,20 +47,17 @@ class BugHunterBenchmark:
             repro = res.get("test_reproduction")
             verifier = res.get("verification_result")
 
-            # Eğer test başlangıçta FAILED ise gerçek pozitif hatadır
             if repro and repro.initial_test_status == "FAILED":
                 true_positives += 1
             else:
                 false_alarms += 1
 
-            # Verifier yamayı kabul etti mi?
             if verifier and verifier.is_accepted:
                 accepted_patches += 1
 
         acceptance_rate = round((accepted_patches / total_bugs) * 100, 2)
         avg_time = round(total_duration_seconds / total_bugs, 2)
         
-        # Tahmini token maliyeti hesabı (Hata başına ortalama ~4.000 token varsayımı)
         estimated_tokens = total_bugs * 4000
         estimated_cost = round((estimated_tokens / 1000) * BugHunterBenchmark.ESTIMATED_INPUT_COST_PER_1K, 5)
 
@@ -77,20 +73,20 @@ class BugHunterBenchmark:
 
     @staticmethod
     def export_report(metrics: BenchmarkMetrics, json_path: str = "benchmark_report.json", md_path: str = "benchmark_report.md"):
-        """Benchmark sonuçlarını dosyaya kaydeder."""
+        """Exports benchmark metrics report to file."""
         write_file(json_path, json.dumps(asdict(metrics), indent=2))
 
-        md_content = f"""# 📊 Self-Healing Bug Hunter Benchmark Raporu
+        md_content = f"""# 📊 Self-Healing Bug Hunter Benchmark Report
 
-| Metrik | Değer |
+| Metric | Value |
 | :--- | :--- |
-| **Taranan Toplam Hata** | `{metrics.total_bugs_scanned}` |
-| **Gerçek Pozitif (True-Positives)** | `{metrics.true_positives}` |
-| **Yanlış Alarm (False Alarms)** | `{metrics.false_alarms}` |
-| **Yama Kabul Oranı (Acceptance Rate)** | **`%{metrics.patch_acceptance_rate}`** |
-| **Ortalama Tamir Süresi (Time-to-Fix)** | `{metrics.avg_time_to_fix_seconds} saniye` |
-| **Toplam İşlem Süresi** | `{metrics.total_duration_seconds} saniye` |
-| **Tahmini Token Maliyeti** | `${metrics.total_token_cost_usd} USD` |
+| **Total Bugs Scanned** | `{metrics.total_bugs_scanned}` |
+| **True-Positives** | `{metrics.true_positives}` |
+| **False Alarms** | `{metrics.false_alarms}` |
+| **Patch Acceptance Rate** | **`%{metrics.patch_acceptance_rate}`** |
+| **Average Time-to-Fix** | `{metrics.avg_time_to_fix_seconds}s` |
+| **Total Pipeline Duration** | `{metrics.total_duration_seconds}s` |
+| **Estimated Token Cost** | `${metrics.total_token_cost_usd} USD` |
 """
         write_file(md_path, md_content)
         return md_path

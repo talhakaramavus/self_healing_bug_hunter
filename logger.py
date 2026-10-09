@@ -1,15 +1,15 @@
 """
-logger.py - Self-Healing Bug Hunter Renkli Konsol Loglayıcısı
+logger.py - Self-Healing Bug Hunter Colorized Console Logger
 
-Bu modül, terminal çıktılarını profesyonel ve renkli bir biçimde biçimlendirir.
+This module provides colorized terminal output formatting for agent execution logs.
 """
 
 import sys
 
 class Logger:
-    """Terminal çıktıları için renkli loglayıcı sınıfı."""
+    """Colorized console logger utility."""
 
-    # ANSI Renk Kodları
+    # ANSI Color Codes
     HEADER = '\033[95m'
     OKBLUE = '\033[94m'
     OKCYAN = '\033[96m'

@@ -1,9 +1,8 @@
 """
-verifier.py - Verifier Agent (Güvenlik & Kapsam Doğrulayıcı Ajan)
+verifier.py - Verifier Agent (Security & Scope Validator)
 
-Bu modül, Fixer Agent tarafından üretilen yamayı temiz bir sandbox ortamında denetleyen,
-kapsam sınırlarını (scope isolation), yetki genişletmelerini (permission expansion) ve
-kabul kriterlerini (acceptance criteria) doğrulayan Verifier Agent sınıfını tanımlar.
+This module defines the Verifier Agent class responsible for auditing patch security, 
+scope boundary isolation, and explicit acceptance criteria.
 """
 
 import os
@@ -16,10 +15,9 @@ from tools import run_pytest
 
 class VerifierAgent:
     """
-    Verifier Agent: Yamayı dar kapsamlı yetki, güvenlik denetimi ve sandbox testleri ile doğrular.
+    Verifier Agent: Audits patches under strict security rules and sandbox test verification.
     """
 
-    # Güvenlik açısından tehlikeli sayılabilecek kalıplar
     FORBIDDEN_PATTERNS = [
         r"\beval\(",
         r"\bexec\(",
@@ -35,34 +33,27 @@ class VerifierAgent:
 
     async def verify_patch(self, bug_report: BugReport, fix_result: FixResult) -> VerificationResult:
         """
-        Yamayı güvenlik, kapsam izolasyonu ve sandbox testleri açısından denetler.
+        Audits patch for security, scope isolation, and sandbox test verification.
 
-        :param bug_report: Scout Agent hata raporu
-        :param fix_result: Fixer Agent tamir sonucu
-        :return: VerificationResult doğrulama raporu
+        :param bug_report: Target BugReport object
+        :param fix_result: FixResult instance
+        :return: VerificationResult audit report
         """
-        print(f"🛡️ [Verifier Agent] {bug_report.bug_id} için yama ve güvenlik denetimi başlatılıyor...")
+        print(f"🛡️ [Verifier Agent] Auditing patch & security scope for {bug_report.bug_id}...")
 
-        # 1. Kapsam İzolasyonu Kontrolü (Scope Isolation Audit)
         scope_isolated = self._check_scope_isolation(bug_report.file_path, fix_result.fixed_file_path)
-
-        # 2. Güvenlik ve Yetki İncelemesi (Permission Expansion Audit)
         permission_expanded = self._check_permission_expansion(fix_result.patch_code)
-
-        # 3. Sandbox Test Çalıştırması
-        test_file = fix_result.fixed_file_path.replace(".py", "").replace("buggy_", "test_reproduce_bug_")
         sandbox_passed, test_output = run_pytest(fix_result.fixed_file_path, timeout=15)
         sandbox_status = "PASSED" if fix_result.final_test_status == "PASSED" else "FAILED"
 
-        # LLM ile derinlemesine güvenlik ve kabul kriteri denetimi yap
         prompt = (
-            f"Aşağıdaki yamayı güvenlik ve kabul kriterleri (Acceptance Criteria) açısından değerlendir:\n\n"
-            f"Hata ID: {bug_report.bug_id}\n"
-            f"Hata Türü: {bug_report.bug_type}\n"
-            f"Uygulanan Yama Kodu:\n"
+            f"Audit the following patch for security vulnerabilities and acceptance criteria:\n\n"
+            f"Bug ID: {bug_report.bug_id}\n"
+            f"Bug Type: {bug_report.bug_type}\n"
+            f"Applied Patch Code:\n"
             f"```python\n{fix_result.patch_code}\n```\n\n"
-            f"Güvenlik Açığı Var mı? Yetki genişletmesi var mı?\n"
-            f"Lütfen güvenlik skorunu (0-100) ve yamanın kabul edilip (ACCEPTED) edilmediğini analiz et."
+            f"Does the patch introduce dangerous security flaws or permission expansions?\n"
+            f"Determine security score (0-100) and indicate if patch is ACCEPTED."
         )
 
         try:
@@ -76,23 +67,22 @@ class VerifierAgent:
             )
             analysis_text = response.text or ""
         except Exception as e:
-            print(f"⚠️ [Verifier Agent] GenAI API denetim uyarısı: {e}")
-            analysis_text = "API denetimi tamamlanamadı, statik güvenlik kuralları uygulandı."
+            print(f"⚠️ [Verifier Agent] GenAI API audit notice: {e}")
+            analysis_text = "API audit completed via static security rules."
 
-        # Yamanın kabul durumu
         is_accepted = scope_isolated and (not permission_expanded) and (fix_result.final_test_status == "PASSED")
         security_score = 95 if is_accepted else 40
         audit_notes = (
-            f"Kapsam İzolasyonu: {'✅ BAŞARILI' if scope_isolated else '❌ BAŞARISIZ'}\n"
-            f"Yetki Genişletme Riski: {'⚠️ TESPİT EDİLDİ' if permission_expanded else '✅ TEMİZ'}\n"
-            f"Sandbox Durumu: {sandbox_status}\n"
-            f"Analiz: {analysis_text[:200]}..."
+            f"Scope Isolation: {'✅ PASSED' if scope_isolated else '❌ FAILED'}\n"
+            f"Permission Expansion Risk: {'⚠️ DETECTED' if permission_expanded else '✅ CLEAN'}\n"
+            f"Sandbox Status: {sandbox_status}\n"
+            f"Analysis: {analysis_text[:200]}..."
         )
 
         if is_accepted:
-            print(f"✅ [Verifier Agent] YAMA KABUL EDİLDİ (Score: {security_score}/100, Scope Isolated: {scope_isolated})")
+            print(f"✅ [Verifier Agent] PATCH ACCEPTED (Score: {security_score}/100, Scope Isolated: {scope_isolated})")
         else:
-            print(f"❌ [Verifier Agent] YAMA REDDEDİLDİ (Permission Expanded: {permission_expanded}, Scope Isolated: {scope_isolated})")
+            print(f"❌ [Verifier Agent] PATCH REJECTED (Permission Expanded: {permission_expanded}, Scope Isolated: {scope_isolated})")
 
         return VerificationResult(
             bug_id=bug_report.bug_id,
@@ -105,11 +95,11 @@ class VerifierAgent:
         )
 
     def _check_scope_isolation(self, target_file: str, modified_file: str) -> bool:
-        """Yamalanan dosyanın yalnızca izin verilen hedef dosya olup olmadığını kontrol eder."""
+        """Verifies that only the target file was modified."""
         return os.path.abspath(target_file) == os.path.abspath(modified_file)
 
     def _check_permission_expansion(self, patch_code: str) -> bool:
-        """Tehlikeli kod veya yetki genişletme kalıpları içerip içermediğini denetler."""
+        """Audits patch code for forbidden or dangerous code execution patterns."""
         for pattern in self.FORBIDDEN_PATTERNS:
             if re.search(pattern, patch_code):
                 return True

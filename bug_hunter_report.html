@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Self-Healing Bug Hunter Report</title>
+    <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #0f172a; color: #f8fafc; padding: 30px; }
+        h1 { color: #38bdf8; }
+        table { width: 100%; border-collapse: collapse; margin-top: 20px; background: #1e293b; border-radius: 8px; overflow: hidden; }
+        th, td { padding: 14px 16px; text-align: left; border-bottom: 1px solid #334155; }
+        th { background: #334155; color: #94a3b8; }
+        .badge { padding: 4px 8px; border-radius: 4px; font-weight: bold; font-size: 12px; }
+        .badge-passed { background: #166534; color: #4ade80; }
+        .badge-failed { background: #991b1b; color: #fca5a5; }
+    </style>
+</head>
+<body>
+    <h1>🛡️ Self-Healing Bug Hunter Report</h1>
+    <table>
+        <thead>
+            <tr>
+                <th>Bug ID</th>
+                <th>Title</th>
+                <th>Type</th>
+                <th>Severity</th>
+                <th>Initial Test</th>
+                <th>Final Status</th>
+                <th>Verification</th>
+                <th>PR Title</th>
+            </tr>
+        </thead>
+        <tbody>
+
+            <tr>
+                <td><code>BUG-001</code></td>
+                <td>Source Logic & Resource Leak Flaw</td>
+                <td>Logic & ResourceLeak</td>
+                <td>HIGH</td>
+                <td><span class="badge badge-failed">PASSED</span></td>
+                <td><span class="badge badge-passed">PASSED</span></td>
+                <td><strong>ACCEPTED</strong> (95/100)</td>
+                <td>fix(logic & resourceleak): resolve Source Logic & Resource Leak Flaw</td>
+            </tr>
+
+        </tbody>
+    </table>
+</body>
+</html>

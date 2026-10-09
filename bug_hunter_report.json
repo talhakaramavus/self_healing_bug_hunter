@@ -1,0 +1,14 @@
+[
+  {
+    "bug_id": "BUG-001",
+    "title": "Source Logic & Resource Leak Flaw",
+    "file_path": "C:\\Users\\talha\\.gemini\\antigravity\\scratch\\self_healing_bug_hunter\\sample_target\\buggy_calculator.py",
+    "bug_type": "Logic & ResourceLeak",
+    "severity": "HIGH",
+    "initial_test_status": "PASSED",
+    "final_test_status": "PASSED",
+    "is_accepted": true,
+    "security_score": 95,
+    "pr_title": "fix(logic & resourceleak): resolve Source Logic & Resource Leak Flaw"
+  }
+]

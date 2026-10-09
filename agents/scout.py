@@ -1,8 +1,8 @@
 """
-scout.py - Scout Agent (Tarayıcı Ajan)
+scout.py - Scout Agent (Codebase Scanner)
 
-Bu modül, google-genai SDK kullanarak kod dizinini inceleyen, mantık hatalarını, 
-güvenlik açıklarını, kaynak sızıntılarını ve tip uyuşmazlıklarını tespit eden Scout Agent sınıfını tanımlar.
+This module defines the Scout Agent class responsible for analyzing target directories 
+to detect logic errors, security flaws, resource leaks, and type mismatches.
 """
 
 import os
@@ -16,7 +16,7 @@ from tools import read_file
 
 class ScoutAgent:
     """
-    Scout Agent: Kod tabanını otonom olarak tarar ve tespit ettiği problemleri BugReport nesnelerine dönüştürür.
+    Scout Agent: Autonomously scans codebase and converts findings into BugReport instances.
     """
 
     def __init__(self):
@@ -25,14 +25,13 @@ class ScoutAgent:
 
     async def scan_directory(self, target_dir: str) -> List[BugReport]:
         """
-        Belirtilen hedef dizindeki Python dosyalarını inceler ve bulunan hataları raporlar.
+        Scans Python source files in the target directory for bugs and vulnerabilities.
 
-        :param target_dir: Taranacak hedef kod dizini
-        :return: Bulunan hataların BugReport listesi
+        :param target_dir: Target directory path
+        :return: List of detected BugReport objects
         """
-        print(f"🔍 [Scout Agent] Kod dizini taranıyor: {target_dir}")
+        print(f"🔍 [Scout Agent] Scanning codebase directory: {target_dir}")
         
-        # Hedef dizindeki .py dosyalarını topla
         py_files = []
         for root, _, files in os.walk(target_dir):
             for file in files:
@@ -40,7 +39,7 @@ class ScoutAgent:
                     py_files.append(os.path.join(root, file))
 
         if not py_files:
-            print("⚠️ [Scout Agent] Taranacak geçerli Python kaynak dosyası bulunamadı.")
+            print("⚠️ [Scout Agent] No valid Python source files found to scan.")
             return []
 
         code_contents = {}
@@ -48,29 +47,28 @@ class ScoutAgent:
             try:
                 code_contents[file_path] = read_file(file_path)
             except Exception as e:
-                print(f"⚠️ Dosya okuma hatası {file_path}: {e}")
+                print(f"⚠️ Error reading file {file_path}: {e}")
 
         prompt = (
-            "Aşağıdaki Python kod dosyalarını güvenlik açıkları, mantık hataları, "
-            "bellek/kaynak sızıntıları ve tip uyuşmazlıkları açısından incele.\n\n"
-            "Her bir bulguyu JSON formatında şu anahtarlarla ver:\n"
+            "Analyze the following Python source code files for security vulnerabilities, "
+            "logic errors, memory/resource leaks, and type mismatches.\n\n"
+            "Output each finding in JSON format with the following keys:\n"
             "[\n"
             "  {\n"
             '    "bug_id": "BUG-001",\n'
-            '    "file_path": "tam_dosya_yolu",\n'
-            '    "title": "Hata Başlığı",\n'
-            '    "description": "Detaylı açıklama",\n'
+            '    "file_path": "full_file_path",\n'
+            '    "title": "Bug Title",\n'
+            '    "description": "Detailed explanation",\n'
             '    "bug_type": "Logic / ResourceLeak / TypeMismatch / Security",\n'
             '    "severity": "HIGH / MEDIUM / LOW",\n'
-            '    "suggested_reproduction": "Nasıl test edileceği"\n'
+            '    "suggested_reproduction": "Suggested test scenario"\n'
             "  }\n"
             "]\n\n"
-            "İncelenecek Kodlar:\n"
+            "Code Files to Analyze:\n"
         )
         for path, code in code_contents.items():
-            prompt += f"--- DOSYA: {path} ---\n{code}\n\n"
+            prompt += f"--- FILE: {path} ---\n{code}\n\n"
 
-        # google-genai async aio client ile model çağrısı yap
         try:
             response = await self.client.aio.models.generate_content(
                 model=self.model,
@@ -82,19 +80,17 @@ class ScoutAgent:
             )
             response_text = response.text or ""
         except Exception as e:
-            print(f"⚠️ [Scout Agent] GenAI API çağrısı sırasında hata oluştu: {e}")
+            print(f"⚠️ [Scout Agent] GenAI API call warning: {e}")
             response_text = ""
 
-        # Yanıtı çözümle (parse)
         return self._parse_reports(response_text, code_contents)
 
     def _parse_reports(self, response_text: str, code_contents: dict) -> List[BugReport]:
         """
-        Ajan yanıtından JSON formatındaki BugReport nesnelerini ayıklar.
+        Extracts structured JSON BugReport objects from the agent response.
         """
         reports = []
         try:
-            # Yanıt içerisindeki JSON bloğunu tespit et
             start_idx = response_text.find("[")
             end_idx = response_text.rfind("]") + 1
             if start_idx != -1 and end_idx != -1 and end_idx > start_idx:
@@ -103,27 +99,26 @@ class ScoutAgent:
                     reports.append(BugReport(
                         bug_id=item.get("bug_id", "BUG-001"),
                         file_path=item.get("file_path", list(code_contents.keys())[0]),
-                        title=item.get("title", "Tespit Edilen Hata"),
-                        description=item.get("description", "Açıklama belirtilmedi."),
+                        title=item.get("title", "Detected Code Flaw"),
+                        description=item.get("description", "No detailed description provided."),
                         bug_type=item.get("bug_type", "Logic"),
                         severity=item.get("severity", "MEDIUM"),
                         suggested_reproduction=item.get("suggested_reproduction", "")
                     ))
         except Exception as e:
-            print(f"⚠️ [Scout Agent] JSON ayrıştırma uyarısı ({e}), kural tabanlı raporlar oluşturuluyor.")
+            print(f"⚠️ [Scout Agent] JSON parsing notice ({e}), applying rule-based default report.")
 
         if not reports:
-            # Yapılandırılmış JSON okunamadıysa kural tabanlı varsayılan rapor üret
             for path in code_contents.keys():
                 reports.append(BugReport(
                     bug_id="BUG-001",
                     file_path=path,
-                    title="Kaynak Kod Mantık & Kaynak Sızıntısı Hatası",
-                    description="Scout agent analizi sonucunda sıfıra bölme, kapatılmayan dosya sızıntısı ve tip hatası tespit edildi.",
+                    title="Source Logic & Resource Leak Flaw",
+                    description="Scout analysis detected potential zero division, unclosed file handle, and type conversion issues.",
                     bug_type="Logic & ResourceLeak",
                     severity="HIGH",
-                    suggested_reproduction="Sıfır böleni ile bölme çağrısı ve dosya kapatma kontrolü yapın."
+                    suggested_reproduction="Invoke division with zero divisor and verify file handle closure."
                 ))
 
-        print(f"✅ [Scout Agent] Toplam {len(reports)} adet hata tespit edildi.")
+        print(f"✅ [Scout Agent] Detected {len(reports)} bug report(s).")
         return reports

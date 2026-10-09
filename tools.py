@@ -1,8 +1,7 @@
 """
-tools.py - Self-Healing Bug Hunter Araç Yardımcıları (Tool Helpers)
+tools.py - Self-Healing Bug Hunter Tool Helpers
 
-Bu modül, ajanların dosya okuma, dosya yazma ve unit testlerini (pytest/unittest)
-otonom olarak çalıştırıp sonuçları analiz edebilmesi için gerekli araç fonksiyonlarını içerir.
+This module provides helper utilities for file reading, writing, and executing pytest suites.
 """
 
 import os
@@ -12,13 +11,13 @@ from typing import Tuple, List
 
 def read_file(file_path: str) -> str:
     """
-    Belirtilen dosya yolundaki içeriği okur.
+    Reads the content of the specified file.
     
-    :param file_path: Okunacak dosya yolu
-    :return: Dosya içeriği metin string'i
+    :param file_path: Target file path
+    :return: File content string
     """
     if not os.path.exists(file_path):
-        raise FileNotFoundError(f"Dosya bulunamadı: {file_path}")
+        raise FileNotFoundError(f"File not found: {file_path}")
     
     with open(file_path, "r", encoding="utf-8") as f:
         return f.read()
@@ -26,10 +25,10 @@ def read_file(file_path: str) -> str:
 
 def write_file(file_path: str, content: str) -> None:
     """
-    Belirtilen dosya yoluna içeriği yazar (klasörler yoksa otomatik oluşturur).
+    Writes content to specified file path (creates parent directories if needed).
     
-    :param file_path: Yazılacak dosya yolu
-    :param content: Yazılacak içerik
+    :param file_path: Target file path
+    :param content: Content string to write
     """
     os.makedirs(os.path.dirname(os.path.abspath(file_path)), exist_ok=True)
     with open(file_path, "w", encoding="utf-8") as f:
@@ -38,7 +37,7 @@ def write_file(file_path: str, content: str) -> None:
 
 def get_python_files(target_dir: str) -> List[str]:
     """
-    Hedef dizindeki tüm Python dosyalarını listeler (test dosyaları hariç).
+    Lists all Python files in target directory (excluding test files).
     """
     py_files = []
     for root, _, files in os.walk(target_dir):
@@ -50,18 +49,16 @@ def get_python_files(target_dir: str) -> List[str]:
 
 def run_pytest(test_file_path: str, timeout: int = 30) -> Tuple[bool, str]:
     """
-    Belirtilen pytest test dosyasını bir alt süreç (subprocess) olarak çalıştırır.
+    Executes a pytest test file as a subprocess.
     
-    :param test_file_path: Çalıştırılacak unit test dosya yolu
-    :param timeout: Zaman aşımı süresi (saniye)
-    :return: (is_passed: bool, output_log: str) ikilisi
-             is_passed True ise tüm testler başarıyla geçmiş demektir.
+    :param test_file_path: Target unit test file path
+    :param timeout: Execution timeout in seconds
+    :return: (is_passed: bool, output_log: str) tuple
     """
     if not os.path.exists(test_file_path):
-        return False, f"Test dosyası mevcut değil: {test_file_path}"
+        return False, f"Test file does not exist: {test_file_path}"
 
     try:
-        # sys.executable kullanarak mevcut Python ortamındaki pytest'i tetikle
         result = subprocess.run(
             [sys.executable, "-m", "pytest", test_file_path, "-v", "--tb=short"],
             capture_output=True,
@@ -72,6 +69,6 @@ def run_pytest(test_file_path: str, timeout: int = 30) -> Tuple[bool, str]:
         output = result.stdout + "\n" + result.stderr
         return is_passed, output.strip()
     except subprocess.TimeoutExpired:
-        return False, f"Test çalıştırma zaman aşımına uğradı (Timeout {timeout}s)."
+        return False, f"Test execution timed out ({timeout}s limit)."
     except Exception as e:
-        return False, f"Test çalıştırılırken beklenmeyen bir hata oluştu: {str(e)}"
+        return False, f"Unexpected error during test execution: {str(e)}"

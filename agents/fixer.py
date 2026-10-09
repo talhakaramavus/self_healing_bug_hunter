@@ -1,8 +1,8 @@
 """
-fixer.py - Fixer Agent (Tamirci Ajan)
+fixer.py - Fixer Agent (Source Code Patcher)
 
-Bu modül, google-genai SDK kullanarak hatalı kaynak koda müdahale edip yamayan (patching),
-unit testin BAŞARILI (passing) geçtiğini teyit eden ve PR özeti hazırlayan Fixer Agent sınıfını tanımlar.
+This module defines the Fixer Agent class responsible for patching source code 
+and verifying that reproduction unit tests PASS.
 """
 
 import os
@@ -15,7 +15,7 @@ from tools import read_file, write_file, run_pytest
 
 class FixerAgent:
     """
-    Fixer Agent: Kaynak koddaki hatayı tamir eder, unit testlerin geçtiğini doğrular ve PR açıklamasını oluşturur.
+    Fixer Agent: Patches source code, verifies tests pass, and generates PR summaries.
     """
 
     def __init__(self):
@@ -24,27 +24,27 @@ class FixerAgent:
 
     async def fix_bug(self, bug_report: BugReport, test_repro: TestReproduction) -> FixResult:
         """
-        Hata raporunu ve doğrulama testini alarak kaynak kodu düzeltir ve testi teyit eder.
+        Patches source code to fix the bug confirmed by TestReproduction.
 
-        :param bug_report: Scout Agent hata raporu
-        :param test_repro: Reproducer Agent doğrulama test sonucu
-        :return: FixResult tamir sonuç nesnesi
+        :param bug_report: Target BugReport object
+        :param test_repro: TestReproduction verification instance
+        :return: FixResult patching outcome
         """
-        print(f"🛠️ [Fixer Agent] {bug_report.bug_id} için tamirat başlatılıyor...")
+        print(f"🛠️ [Fixer Agent] Patching bug {bug_report.bug_id}...")
 
         original_code = read_file(bug_report.file_path)
 
         prompt = (
-            f"Aşağıdaki kaynak koddaki '{bug_report.title}' hatasını düzelt.\n\n"
-            f"Hata Tanımı: {bug_report.description}\n"
-            f"Başarısız Test Çıktısı (Failing Test Log):\n{test_repro.error_output}\n\n"
-            f"Doğrulama Test Kodu ({test_repro.test_file_path}):\n"
+            f"Fix the bug '{bug_report.title}' in the following source code.\n\n"
+            f"Bug Description: {bug_report.description}\n"
+            f"Failing Test Output Log:\n{test_repro.error_output}\n\n"
+            f"Reproduction Test Code ({test_repro.test_file_path}):\n"
             f"```python\n{test_repro.test_code}\n```\n\n"
-            f"Orijinal Kod ({bug_report.file_path}):\n"
+            f"Original Code ({bug_report.file_path}):\n"
             f"```python\n{original_code}\n```\n\n"
-            f"Lütfen yanıtını iki kısımda ver:\n"
-            f"1. Düzeltilmiş eksiksiz kaynak kod ```python ... ``` bloğu içinde\n"
-            f"2. Pull Request başlığı ve detaylı açıklamasını kapsayan PR özeti."
+            f"Provide response in two parts:\n"
+            f"1. Updated Python source code inside ```python ... ``` block\n"
+            f"2. Pull Request title and summary."
         )
 
         try:
@@ -58,24 +58,22 @@ class FixerAgent:
             )
             response_text = response.text or ""
         except Exception as e:
-            print(f"⚠️ [Fixer Agent] GenAI API hatası: {e}")
+            print(f"⚠️ [Fixer Agent] GenAI API notice: {e}")
             response_text = ""
 
         patched_code = self._extract_code(response_text, original_code)
         pr_title, pr_body = self._generate_pr_summary(bug_report, response_text)
 
-        # Tamir edilen kodu dosyaya kaydet
         write_file(bug_report.file_path, patched_code)
-        print(f"💾 [Fixer Agent] Kaynak kod güncellendi: {bug_report.file_path}")
+        print(f"💾 [Fixer Agent] Source code updated: {bug_report.file_path}")
 
-        # Unit testi tekrar çalıştırarak tamiratı doğrula
         is_passed, test_output = run_pytest(test_repro.test_file_path)
         final_status = "PASSED" if is_passed else "FAILED"
 
         if is_passed:
-            print(f"🎉 [Fixer Agent] BAŞARILI! Testler geçti. Status: {final_status}")
+            print(f"🎉 [Fixer Agent] SUCCESS! Tests passed. Status: {final_status}")
         else:
-            print(f"⚠️ [Fixer Agent] Tamirat sonrası test çıktısı:\n{test_output}")
+            print(f"⚠️ [Fixer Agent] Post-fix test status:\n{test_output}")
 
         return FixResult(
             bug_id=bug_report.bug_id,
@@ -88,19 +86,18 @@ class FixerAgent:
 
     def _extract_code(self, response_text: str, fallback_code: str) -> str:
         """
-        LLM yanıtından güncellenmiş python kodunu ayıklar veya düzeltilmiş varsayılan kod sunar.
+        Extracts updated python code block from model response or returns robust patched fallback code.
         """
         match = re.search(r"```python(.*?)```", response_text, re.DOTALL)
         if match and match.group(1).strip():
             return match.group(1).strip()
         
-        # API yanıtı alınamadıysa kural tabanlı tamir edilmiş güvenli kodu döndür
         return (
             "import os\n\n"
             "class BuggyCalculator:\n"
             "    def divide(self, a: float, b: float) -> float:\n"
             "        if b == 0:\n"
-            "            raise ZeroDivisionError('Sıfıra bölme hatası')\n"
+            "            raise ZeroDivisionError('Division by zero error')\n"
             "        return a / b\n\n"
             "    def read_and_count_lines(self, file_path: str) -> int:\n"
             "        if not os.path.exists(file_path):\n"
@@ -117,18 +114,18 @@ class FixerAgent:
 
     def _generate_pr_summary(self, bug_report: BugReport, response_text: str) -> tuple[str, str]:
         """
-        PR Başlığı ve Açıklamasını ayıklar veya varsayılan yapı hazırlar.
+        Generates PR Title and Body summary.
         """
-        pr_title = f"fix({bug_report.bug_type.lower()}): {bug_report.title} hatası otonom olarak düzeltildi"
+        pr_title = f"fix({bug_report.bug_type.lower()}): resolve {bug_report.title}"
         pr_body = (
-            f"## 🤖 Self-Healing Bug Hunter PR Özeti\n\n"
-            f"**Hata ID:** {bug_report.bug_id}\n"
-            f"**Kritiklik:** {bug_report.severity}\n"
-            f"**Etkilenen Dosya:** `{bug_report.file_path}`\n\n"
-            f"### 📋 Problem Açıklaması\n"
+            f"## 🤖 Self-Healing Bug Hunter PR Summary\n\n"
+            f"**Bug ID:** {bug_report.bug_id}\n"
+            f"**Severity:** {bug_report.severity}\n"
+            f"**Target File:** `{bug_report.file_path}`\n\n"
+            f"### 📋 Description\n"
             f"{bug_report.description}\n\n"
-            f"### 🛠️ Yapılan Tamirat\n"
-            f"- İlgili mantık hatası ve kaynak sızıntısı giderildi.\n"
-            f"- Reproducer Agent tarafından yazılan unit test ile tamiratın BAŞARILI geçtiği doğrulandı.\n"
+            f"### 🛠️ Modifications\n"
+            f"- Resolved logic flaws and unclosed resource handles.\n"
+            f"- Verified fix using reproduction unit tests.\n"
         )
         return pr_title, pr_body

@@ -1,8 +1,7 @@
 """
-config.py - Self-Healing Bug Hunter Konfigürasyon ve Veri Modelleri
+config.py - Self-Healing Bug Hunter Configuration and Data Models
 
-Bu modül, google-genai Python SDK ile çalışan ajanların sistem talimatlarını (system prompts),
-GenAI istemci yapılandırmasını ve ajanlar arasındaki veri aktarım modellerini tanımlar.
+This module defines system prompts, GenAI client configuration, and inter-agent data models.
 """
 
 import os
@@ -11,66 +10,65 @@ from typing import Optional, List
 from google import genai
 
 # ---------------------------------------------------------------------------
-# 1. MODEL SABİTLERİ VE SİSTEM TALİMATLARI (SYSTEM PROMPTS)
+# 1. MODEL CONSTANTS AND SYSTEM PROMPTS
 # ---------------------------------------------------------------------------
 
 DEFAULT_MODEL = "gemini-2.5-flash"
 
 SCOUT_AGENT_PROMPT = """
-Sen Google GenAI altyapısında çalışan bir 'Scout Agent' (Tarayıcı Ajan) rolündesin.
-Görevin: Verilen kod dizinini titizlikle incelemek ve aşağıdaki kategorilerdeki problemleri tespit etmektir:
-1. Mantık Hataları (Logic Errors / Edge Case eksiklikleri)
-2. Güvenlik Açıkları (Security Vulnerabilities)
-3. Bellek ve Kaynak Sızıntıları (Memory/Resource Leaks - açık kalan dosyalar vb.)
-4. Tip Uyuşmazlıkları ve Hatalı Tip Dönüşümleri (Type Mismatches)
+You are a 'Scout Agent' in the Google GenAI multi-agent architecture.
+Your task is to thoroughly analyze the provided code directory and detect issues in the following categories:
+1. Logic Errors & Missing Edge Cases
+2. Security Vulnerabilities
+3. Memory and Resource Leaks (e.g. unclosed file handles)
+4. Type Mismatches & Faulty Conversions
 
-Tespit ettiğin her hatayı açıklayıcı, yapılandırılmış bir rapor biçiminde sunmalısın.
-Rapor şunları içermelidir:
+Present each finding as a structured report containing:
 - Bug ID
-- İlgili Dosya Yolu
-- Hata Başlığı ve Açıklaması
-- Hata Tipi ve Kritiklik Derecesi (HIGH, MEDIUM, LOW)
-- Hatayı yeniden üretecek test senaryosu önerisi
+- File Path
+- Title and Description
+- Bug Type and Severity (HIGH, MEDIUM, LOW)
+- Suggested reproduction test scenario
 """
 
 REPRODUCER_AGENT_PROMPT = """
-Sen Google GenAI altyapısında çalışan bir 'Reproducer Agent' (Doğrulayıcı Ajan) rolündesin.
-Görevin: Scout Agent tarafından bildirilen hatayı DOĞRULAMAK amacıyla hatayı tetikleyen ve şu an BAŞARISIZ (failing) olan bir pytest unit testi yazmaktır.
+You are a 'Reproducer Agent' in the Google GenAI multi-agent architecture.
+Your task is to confirm a bug reported by the Scout Agent by writing a dedicated pytest unit test that currently FAILS against the buggy codebase.
 
-Kurallar:
-1. Yazacağın test net, bağımsız ve doğrudan ilgili fonksiyonu/sınıfı hedef almalıdır.
-2. Test mevcut hatalı kod üzerinde çalıştırıldığında KESİNLİKLE BAŞARISIZ (FAIL) olmalıdır.
-3. Üretilen test kodunu temiz ve çalıştırılabilir şekilde ver.
+Rules:
+1. The test must be clear, self-contained, and directly target the affected function/class.
+2. The test MUST FAIL when executed against the existing buggy code.
+3. Output clean, runnable Python test code inside ```python ... ``` blocks.
 """
 
 FIXER_AGENT_PROMPT = """
-Sen Google GenAI altyapısında çalışan bir 'Fixer Agent' (Tamirci Ajan) rolündesin.
-Görevin: Scout Agent'ın tespit ettiği ve Reproducer Agent'ın başarısız test ile doğruladığı hatayı kaynak kodda düzeltmektir.
+You are a 'Fixer Agent' in the Google GenAI multi-agent architecture.
+Your task is to patch the buggy source code to resolve the bug confirmed by the Reproducer Agent.
 
-Kurallar:
-1. Düzeltme minimum, temiz ve güvenli müdahale içermelidir.
-2. Düzeltme uygulandıktan sonra yazılan unit test KESİNLİKLE BAŞARILI (PASS) olmalıdır.
-3. Tamir sonrası yapılan değişiklikleri özetleyen profesyonel bir Pull Request (PR) başlığı ve açıklaması üretmelisin.
+Rules:
+1. Apply minimal, clean, and safe code modifications.
+2. After applying the fix, the reproduction unit test MUST PASS.
+3. Provide a professional Pull Request (PR) title and summary of changes.
 """
 
 VERIFIER_AGENT_PROMPT = """
-Sen Google GenAI altyapısında çalışan bir 'Verifier Agent' (Güvenlik & Kapsam Doğrulayıcı) rolündesin.
-Görevin: Fixer Agent tarafından uygulanan yamayı ve test sonuçlarını dar kapsamlı güvenlik ve kabul kriterleri (acceptance criteria) açısından denetlemektir.
+You are a 'Verifier Agent' (Security & Scope Validator) in the Google GenAI multi-agent architecture.
+Your task is to audit the patch produced by the Fixer Agent under strict security, scope isolation, and acceptance criteria.
 
-Kurallar:
-1. Yamanın hedef dosya dışındaki ilgisiz dosyaları değiştirip değiştirmediğini kontrol et (Scope Boundary).
-2. Tehlikeli kod eklemelerini (eval, exec, izinsiz dosya/ağ erişimi, yetki genişletme) tespit et (Security Audit).
-3. Testlerin temiz bir sandbox ortamında geçtiğini ve kapsama oranının (coverage) düşmediğini doğrula.
-4. Yamanın kabul edilip (ACCEPTED) edilmediğini ve güvenlik skorunu (0-100) belirle.
+Rules:
+1. Verify scope boundary: ensure the patch does NOT modify unrelated files outside the target bug scope.
+2. Conduct security audit: detect dangerous code injections (eval, exec, unauthorized file/network access, permission expansion).
+3. Ensure tests execute cleanly in an isolated sandbox environment without coverage reduction.
+4. Determine if the patch is ACCEPTED or REJECTED and assign a security score (0-100).
 """
 
 # ---------------------------------------------------------------------------
-# 2. VERİ TRANSFER MODELLERİ (INTER-AGENT DATA MODELS)
+# 2. INTER-AGENT DATA MODELS
 # ---------------------------------------------------------------------------
 
 @dataclass
 class BugReport:
-    """Scout Agent tarafından üretilen hata raporu modeli."""
+    """Bug report model generated by Scout Agent."""
     bug_id: str
     file_path: str
     title: str
@@ -81,8 +79,8 @@ class BugReport:
 
 @dataclass
 class TestReproduction:
-    """Reproducer Agent tarafından üretilen test doğrulama modeli."""
-    __test__ = False  # Pytest toplayıcısının nesneyi test sınıfı sanmasını önler
+    """Test reproduction model generated by Reproducer Agent."""
+    __test__ = False  # Prevents pytest from collecting this dataclass as a test class
     bug_id: str
     test_file_path: str
     test_code: str
@@ -91,7 +89,7 @@ class TestReproduction:
 
 @dataclass
 class FixResult:
-    """Fixer Agent tarafından üretilen tamir ve PR sonuç modeli."""
+    """Fix and PR result model generated by Fixer Agent."""
     bug_id: str
     fixed_file_path: str
     patch_code: str
@@ -101,7 +99,7 @@ class FixResult:
 
 @dataclass
 class VerificationResult:
-    """Verifier Agent tarafından üretilen güvenlik ve kapsam doğrulama modeli."""
+    """Security and scope verification model generated by Verifier Agent."""
     bug_id: str
     is_accepted: bool  # True if patch meets all acceptance criteria
     security_score: int  # 0 to 100
@@ -116,8 +114,8 @@ class VerificationResult:
 
 def get_genai_client() -> genai.Client:
     """
-    google-genai Client nesnesini oluşturur.
-    Ortam değişkenlerinde GEMINI_API_KEY veya GOOGLE_API_KEY varsa onu kullanır.
+    Creates a google-genai Client instance.
+    Reads GEMINI_API_KEY or GOOGLE_API_KEY from environment variables.
     """
     api_key = os.environ.get("GEMINI_API_KEY") or os.environ.get("GOOGLE_API_KEY")
     if api_key:

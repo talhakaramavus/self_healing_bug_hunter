@@ -3,7 +3,7 @@ import os
 class BuggyCalculator:
     def divide(self, a: float, b: float) -> float:
         if b == 0:
-            raise ZeroDivisionError('Sıfıra bölme hatası')
+            raise ZeroDivisionError('Division by zero error')
         return a / b
 
     def read_and_count_lines(self, file_path: str) -> int:
