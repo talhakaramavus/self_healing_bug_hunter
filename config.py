@@ -7,7 +7,7 @@ GenAI istemci yapılandırmasını ve ajanlar arasındaki veri aktarım modeller
 
 import os
 from dataclasses import dataclass
-from typing import Optional
+from typing import Optional, List
 from google import genai
 
 # ---------------------------------------------------------------------------
@@ -53,6 +53,17 @@ Kurallar:
 3. Tamir sonrası yapılan değişiklikleri özetleyen profesyonel bir Pull Request (PR) başlığı ve açıklaması üretmelisin.
 """
 
+VERIFIER_AGENT_PROMPT = """
+Sen Google GenAI altyapısında çalışan bir 'Verifier Agent' (Güvenlik & Kapsam Doğrulayıcı) rolündesin.
+Görevin: Fixer Agent tarafından uygulanan yamayı ve test sonuçlarını dar kapsamlı güvenlik ve kabul kriterleri (acceptance criteria) açısından denetlemektir.
+
+Kurallar:
+1. Yamanın hedef dosya dışındaki ilgisiz dosyaları değiştirip değiştirmediğini kontrol et (Scope Boundary).
+2. Tehlikeli kod eklemelerini (eval, exec, izinsiz dosya/ağ erişimi, yetki genişletme) tespit et (Security Audit).
+3. Testlerin temiz bir sandbox ortamında geçtiğini ve kapsama oranının (coverage) düşmediğini doğrula.
+4. Yamanın kabul edilip (ACCEPTED) edilmediğini ve güvenlik skorunu (0-100) belirle.
+"""
+
 # ---------------------------------------------------------------------------
 # 2. VERİ TRANSFER MODELLERİ (INTER-AGENT DATA MODELS)
 # ---------------------------------------------------------------------------
@@ -87,6 +98,17 @@ class FixResult:
     final_test_status: str  # PASSED
     pr_title: str
     pr_body: str
+
+@dataclass
+class VerificationResult:
+    """Verifier Agent tarafından üretilen güvenlik ve kapsam doğrulama modeli."""
+    bug_id: str
+    is_accepted: bool  # True if patch meets all acceptance criteria
+    security_score: int  # 0 to 100
+    scope_isolated: bool  # True if patch only touches intended files
+    permission_expanded: bool  # True if dangerous/broad permissions were detected
+    sandbox_status: str  # PASSED / FAILED / BLOCKED
+    audit_notes: str
 
 # ---------------------------------------------------------------------------
 # 3. GENAI CLIENT FACTORY
