@@ -4,6 +4,6 @@
   "false_alarms": 1,
   "patch_acceptance_rate": 100.0,
   "total_token_cost_usd": 0.0006,
-  "avg_time_to_fix_seconds": 2.15,
-  "total_duration_seconds": 2.15
+  "avg_time_to_fix_seconds": 2.25,
+  "total_duration_seconds": 2.25
 }

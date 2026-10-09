@@ -1,17 +1,17 @@
 """
-test_bug_hunter.py - Self-Healing Bug Hunter Test Paketi
+test_bug_hunter.py - Self-Healing Bug Hunter Test Suite
 
-Bu modül, altyapıdaki araçların, veri modellerinin ve raporlama bileşenlerinin doğruluğunu test eder.
+This module tests the core data models, tools, and report exporters.
 """
 
 import os
 import pytest
-from config import BugReport, TestReproduction, FixResult
+from config import BugReport, TestReproduction, FixResult, VerificationResult
 from tools import read_file, write_file, get_python_files
 from reporter import BugReporter
 
 def test_data_models():
-    """BugReport ve FixResult nesnelerinin oluşturulmasını test eder."""
+    """Tests instantiation of core dataclass models."""
     report = BugReport(
         bug_id="BUG-TEST",
         file_path="sample.py",
@@ -25,7 +25,7 @@ def test_data_models():
     assert report.severity == "HIGH"
 
 def test_file_tools(tmp_path):
-    """Dosya okuma ve yazma araçlarını test eder."""
+    """Tests file reading and writing utilities."""
     test_file = tmp_path / "sample.txt"
     content = "Hello Self-Healing Bug Hunter"
     write_file(str(test_file), content)
@@ -34,12 +34,13 @@ def test_file_tools(tmp_path):
     assert read_file(str(test_file)) == content
 
 def test_reporter_export(tmp_path):
-    """HTML ve Markdown rapor dışa aktarma işlevlerini test eder."""
+    """Tests HTML, Markdown, and JSON report exporters with 4-agent verification data."""
     bug = BugReport("BUG-01", "app.py", "Null Pointer", "Null check missing", "Logic", "HIGH", "repro")
     repro = TestReproduction("BUG-01", "test_app.py", "def test(): pass", "FAILED", "Error log")
     fix = FixResult("BUG-01", "app.py", "patched code", "PASSED", "fix: null check", "PR body")
+    ver = VerificationResult("BUG-01", True, 95, True, False, "PASSED", "Clean audit notes")
     
-    results = [{"bug_report": bug, "test_reproduction": repro, "fix_result": fix}]
+    results = [{"bug_report": bug, "test_reproduction": repro, "fix_result": fix, "verification_result": ver}]
     
     json_path = str(tmp_path / "report.json")
     md_path = str(tmp_path / "report.md")
