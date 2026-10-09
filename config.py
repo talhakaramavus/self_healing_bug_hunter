@@ -14,7 +14,7 @@ from google import genai
 # 1. MODEL SABİTLERİ VE SİSTEM TALİMATLARI (SYSTEM PROMPTS)
 # ---------------------------------------------------------------------------
 
-DEFAULT_MODEL = "gemini-1.5-flash"
+DEFAULT_MODEL = "gemini-2.5-flash"
 
 SCOUT_AGENT_PROMPT = """
 Sen Google GenAI altyapısında çalışan bir 'Scout Agent' (Tarayıcı Ajan) rolündesin.
@@ -71,6 +71,7 @@ class BugReport:
 @dataclass
 class TestReproduction:
     """Reproducer Agent tarafından üretilen test doğrulama modeli."""
+    __test__ = False  # Pytest toplayıcısının nesneyi test sınıfı sanmasını önler
     bug_id: str
     test_file_path: str
     test_code: str
