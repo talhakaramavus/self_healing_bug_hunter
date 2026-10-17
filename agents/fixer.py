@@ -1,13 +1,15 @@
 """
 fixer.py - Fixer Agent (Source Code Patcher)
 
-This module defines the Fixer Agent class responsible for patching source code 
-and verifying that reproduction unit tests PASS.
+This module defines the Fixer Agent class responsible for patching source code,
+verifying that reproduction unit tests PASS, and iteratively refining patches
+via an adaptive feedback loop.
 """
 
 import os
 import re
 import asyncio
+from typing import Optional
 from google import genai
 from google.genai import types
 from config import FIXER_AGENT_PROMPT, DEFAULT_MODEL, BugReport, TestReproduction, FixResult, get_genai_client
@@ -15,24 +17,41 @@ from tools import read_file, write_file, run_pytest
 
 class FixerAgent:
     """
-    Fixer Agent: Patches source code, verifies tests pass, and generates PR summaries.
+    Fixer Agent: Patches source code, verifies tests pass, and refines fixes iteratively.
     """
 
     def __init__(self):
         self.client = get_genai_client()
         self.model = DEFAULT_MODEL
 
-    async def fix_bug(self, bug_report: BugReport, test_repro: TestReproduction) -> FixResult:
+    async def fix_bug(
+        self, 
+        bug_report: BugReport, 
+        test_repro: TestReproduction, 
+        attempt: int = 1,
+        feedback: Optional[str] = None
+    ) -> FixResult:
         """
-        Patches source code to fix the bug confirmed by TestReproduction.
+        Patches source code to fix the bug confirmed by TestReproduction,
+        incorporating adaptive feedback on subsequent attempts.
 
         :param bug_report: Target BugReport object
         :param test_repro: TestReproduction verification instance
+        :param attempt: Current patch iteration attempt (1-based)
+        :param feedback: Diagnostic feedback from prior failed attempt (if any)
         :return: FixResult patching outcome
         """
-        print(f"🛠️ [Fixer Agent] Patching bug {bug_report.bug_id}...")
+        print(f"🛠️ [Fixer Agent] Patching bug {bug_report.bug_id} (Attempt {attempt})...")
 
         original_code = read_file(bug_report.file_path)
+
+        feedback_instruction = ""
+        if feedback and attempt > 1:
+            feedback_instruction = (
+                f"\n\n⚠️ IMPORTANT: Attempt {attempt - 1} was REJECTED with the following feedback:\n"
+                f"{feedback}\n"
+                f"Please fix the underlying issue noted above without breaking tests or expanding permissions.\n"
+            )
 
         prompt = (
             f"Fix the bug '{bug_report.title}' in the following source code.\n\n"
@@ -41,7 +60,8 @@ class FixerAgent:
             f"Reproduction Test Code ({test_repro.test_file_path}):\n"
             f"```python\n{test_repro.test_code}\n```\n\n"
             f"Original Code ({bug_report.file_path}):\n"
-            f"```python\n{original_code}\n```\n\n"
+            f"```python\n{original_code}\n```"
+            f"{feedback_instruction}\n\n"
             f"Provide response in two parts:\n"
             f"1. Updated Python source code inside ```python ... ``` block\n"
             f"2. Pull Request title and summary."
@@ -62,7 +82,7 @@ class FixerAgent:
             response_text = ""
 
         patched_code = self._extract_code(response_text, original_code)
-        pr_title, pr_body = self._generate_pr_summary(bug_report, response_text)
+        pr_title, pr_body = self._generate_pr_summary(bug_report, response_text, attempt)
 
         write_file(bug_report.file_path, patched_code)
         print(f"💾 [Fixer Agent] Source code updated: {bug_report.file_path}")
@@ -71,9 +91,9 @@ class FixerAgent:
         final_status = "PASSED" if is_passed else "FAILED"
 
         if is_passed:
-            print(f"🎉 [Fixer Agent] SUCCESS! Tests passed. Status: {final_status}")
+            print(f"🎉 [Fixer Agent] SUCCESS! Tests passed on attempt {attempt}. Status: {final_status}")
         else:
-            print(f"⚠️ [Fixer Agent] Post-fix test status:\n{test_output}")
+            print(f"⚠️ [Fixer Agent] Post-fix test status on attempt {attempt}:\n{test_output}")
 
         return FixResult(
             bug_id=bug_report.bug_id,
@@ -112,7 +132,7 @@ class FixerAgent:
             "        return total\n"
         )
 
-    def _generate_pr_summary(self, bug_report: BugReport, response_text: str) -> tuple[str, str]:
+    def _generate_pr_summary(self, bug_report: BugReport, response_text: str, attempt: int = 1) -> tuple[str, str]:
         """
         Generates PR Title and Body summary.
         """
@@ -121,7 +141,8 @@ class FixerAgent:
             f"## 🤖 Self-Healing Bug Hunter PR Summary\n\n"
             f"**Bug ID:** {bug_report.bug_id}\n"
             f"**Severity:** {bug_report.severity}\n"
-            f"**Target File:** `{bug_report.file_path}`\n\n"
+            f"**Target File:** `{bug_report.file_path}`\n"
+            f"**Resolution Iterations:** {attempt} attempt(s)\n\n"
             f"### 📋 Description\n"
             f"{bug_report.description}\n\n"
             f"### 🛠️ Modifications\n"

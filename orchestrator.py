@@ -1,7 +1,8 @@
 """
 orchestrator.py - Self-Healing Bug Hunter Pipeline Orchestrator
 
-This module orchestrates asynchronous data flow across Scout -> Reproducer -> Fixer -> Verifier agents.
+This module orchestrates asynchronous data flow across Scout -> Reproducer -> Fixer -> Verifier agents,
+featuring an adaptive iterative multi-repair loop (up to 3 attempts with diagnostic feedback).
 """
 
 import time
@@ -19,15 +20,17 @@ class BugHunterOrchestrator:
     BugHunterOrchestrator: Main pipeline orchestrator for the 4-agent self-healing workflow.
     """
 
-    def __init__(self):
+    def __init__(self, max_repair_attempts: int = 3):
         self.scout_agent = ScoutAgent()
         self.reproducer_agent = ReproducerAgent()
         self.fixer_agent = FixerAgent()
         self.verifier_agent = VerifierAgent()
+        self.max_repair_attempts = max_repair_attempts
 
     async def run_pipeline(self, target_dir: str) -> Dict[str, Any]:
         """
-        Executes the asynchronous Scout -> Reproducer -> Fixer -> Verifier pipeline.
+        Executes the asynchronous Scout -> Reproducer -> Fixer -> Verifier pipeline
+        with an adaptive multi-attempt feedback loop.
 
         :param target_dir: Target codebase directory path
         :return: Dictionary containing results list and benchmark metrics
@@ -53,8 +56,31 @@ class BugHunterOrchestrator:
             print("--------------------------------------------------------------------------------")
 
             test_repro: TestReproduction = await self.reproducer_agent.reproduce_bug(report)
-            fix_result: FixResult = await self.fixer_agent.fix_bug(report, test_repro)
-            verification: VerificationResult = await self.verifier_agent.verify_patch(report, fix_result)
+
+            # Adaptive Iterative Repair Loop
+            fix_result = None
+            verification = None
+            feedback = None
+
+            for attempt in range(1, self.max_repair_attempts + 1):
+                fix_result = await self.fixer_agent.fix_bug(
+                    report, 
+                    test_repro, 
+                    attempt=attempt, 
+                    feedback=feedback
+                )
+                verification = await self.verifier_agent.verify_patch(report, fix_result)
+
+                if fix_result.final_test_status == "PASSED" and verification.is_accepted:
+                    print(f"🎯 [Orchestrator] Fix verified and accepted on attempt {attempt}/{self.max_repair_attempts}!")
+                    break
+                else:
+                    feedback = (
+                        f"Test status: {fix_result.final_test_status}. "
+                        f"Audit Notes: {verification.audit_notes}"
+                    )
+                    if attempt < self.max_repair_attempts:
+                        print(f"⚠️ [Orchestrator] Attempt {attempt} failed validation. Retrying with adaptive feedback...")
 
             pipeline_results.append({
                 "bug_report": report,
