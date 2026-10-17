@@ -473,11 +473,11 @@ def load_initial_reports():
 def start_dashboard(port: int = 8080):
     """Starts the Self-Healing Bug Hunter web dashboard server."""
     load_initial_reports()
-    server_address = ("", port)
+    server_address = ("127.0.0.1", port)
     httpd = HTTPServer(server_address, DashboardHTTPHandler)
     print("=" * 70)
     print(f"📊 [Dashboard] Self-Healing Bug Hunter Web Dashboard is live!")
-    print(f"👉 Local URL: http://localhost:{port}")
+    print(f"👉 Local URL: http://127.0.0.1:{port}")
     print(f"👉 Press Ctrl+C to stop the dashboard server.")
     print("=" * 70)
     try:

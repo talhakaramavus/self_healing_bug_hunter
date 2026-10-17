@@ -2,6 +2,10 @@
 .env
 .env.local
 *.env
+*.key
+*.pem
+*secret*
+*token*
 
 # Python bytecode & cache
 __pycache__/
