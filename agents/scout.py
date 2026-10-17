@@ -2,7 +2,8 @@
 scout.py - Scout Agent (Codebase Scanner)
 
 This module defines the Scout Agent class responsible for analyzing target directories 
-to detect logic errors, security flaws, resource leaks, and type mismatches.
+to detect logic errors, security flaws, resource leaks, and type mismatches using 
+both deterministic static AST analysis and Google GenAI LLM inspection.
 """
 
 import os
@@ -13,10 +14,11 @@ from google import genai
 from google.genai import types
 from config import SCOUT_AGENT_PROMPT, DEFAULT_MODEL, BugReport, get_genai_client
 from tools import read_file
+from static_analyzer import StaticAnalyzer
 
 class ScoutAgent:
     """
-    Scout Agent: Autonomously scans codebase and converts findings into BugReport instances.
+    Scout Agent: Autonomously scans codebase using hybrid static AST analysis and GenAI.
     """
 
     def __init__(self):
@@ -25,7 +27,7 @@ class ScoutAgent:
 
     async def scan_directory(self, target_dir: str) -> List[BugReport]:
         """
-        Scans Python source files in the target directory for bugs and vulnerabilities.
+        Scans source files in target directory using static analysis and LLM inspection.
 
         :param target_dir: Target directory path
         :return: List of detected BugReport objects
@@ -35,13 +37,32 @@ class ScoutAgent:
         py_files = []
         for root, _, files in os.walk(target_dir):
             for file in files:
-                if file.endswith(".py") and not file.startswith("test_"):
+                if file.endswith(".py") and not file.startswith("test_") and not file.startswith("__"):
                     py_files.append(os.path.join(root, file))
 
         if not py_files:
             print("⚠️ [Scout Agent] No valid Python source files found to scan.")
             return []
 
+        # 1. Deterministic AST Static Security & Logic Analysis
+        ast_reports: List[BugReport] = []
+        for file_path in py_files:
+            try:
+                static_findings = StaticAnalyzer.analyze_file(file_path)
+                for item in static_findings:
+                    ast_reports.append(BugReport(
+                        bug_id=item["bug_id"],
+                        file_path=item["file_path"],
+                        title=item["title"],
+                        description=item["description"],
+                        bug_type=item["bug_type"],
+                        severity=item["severity"],
+                        suggested_reproduction=item["suggested_reproduction"]
+                    ))
+            except Exception as e:
+                print(f"⚠️ [Scout Agent] Static analysis notice for {file_path}: {e}")
+
+        # 2. Source Code Reading for LLM Analysis
         code_contents = {}
         for file_path in py_files:
             try:
@@ -83,7 +104,20 @@ class ScoutAgent:
             print(f"⚠️ [Scout Agent] GenAI API call warning: {e}")
             response_text = ""
 
-        return self._parse_reports(response_text, code_contents)
+        llm_reports = self._parse_reports(response_text, code_contents)
+
+        # Merge AST findings and LLM findings (deduplicating by file and title)
+        merged_reports = list(ast_reports)
+        seen_keys = {(r.file_path, r.bug_type) for r in merged_reports}
+
+        for report in llm_reports:
+            key = (report.file_path, report.bug_type)
+            if key not in seen_keys:
+                merged_reports.append(report)
+                seen_keys.add(key)
+
+        print(f"✅ [Scout Agent] Total detected bug reports (AST + LLM): {len(merged_reports)}")
+        return merged_reports
 
     def _parse_reports(self, response_text: str, code_contents: dict) -> List[BugReport]:
         """
@@ -120,5 +154,4 @@ class ScoutAgent:
                     suggested_reproduction="Invoke division with zero divisor and verify file handle closure."
                 ))
 
-        print(f"✅ [Scout Agent] Detected {len(reports)} bug report(s).")
         return reports
