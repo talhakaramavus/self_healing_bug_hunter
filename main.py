@@ -3,6 +3,7 @@ main.py - Self-Healing Bug Hunter Main CLI Entry Point
 
 This file triggers the 4-agent asynchronous pipeline (Scout, Reproducer, Fixer, Verifier) 
 and executes autonomous bug discovery, reproduction, fixing, and auditing.
+Supports multi-language detection, AST static security analysis, iterative repair, and automated PR creation.
 """
 
 import os
@@ -18,6 +19,8 @@ from orchestrator import BugHunterOrchestrator
 from reporter import BugReporter
 from benchmark import BugHunterBenchmark
 from logger import Logger
+from multi_language import MultiLanguageManager
+from pr_creator import PullRequestCreator
 
 async def main():
     """
@@ -27,6 +30,8 @@ async def main():
     parser.add_argument("--target-dir", type=str, default=None, help="Target codebase directory to scan")
     parser.add_argument("--export-reports", action="store_true", default=True, help="Export HTML, Markdown, and JSON reports")
     parser.add_argument("--export-benchmark", action="store_true", default=True, help="Save benchmark metrics report")
+    parser.add_argument("--create-pr", action="store_true", default=False, help="Autonomously create git branch and Pull Request for verified patches")
+    parser.add_argument("--max-repair-attempts", type=int, default=3, help="Maximum iterative repair attempts per bug")
     args = parser.parse_args()
 
     current_dir = os.path.dirname(os.path.abspath(__file__))
@@ -40,7 +45,11 @@ async def main():
     Logger.banner("SELF-HEALING BUG HUNTER MULTI-AGENT SYSTEM")
     Logger.info(f"Target Codebase Directory: {target_dir}")
 
-    orchestrator = BugHunterOrchestrator()
+    # Detect codebase programming languages
+    detected_languages = MultiLanguageManager.detect_project_languages(target_dir)
+    Logger.info(f"Detected Languages: {', '.join(detected_languages).upper()}")
+
+    orchestrator = BugHunterOrchestrator(max_repair_attempts=args.max_repair_attempts)
 
     pipeline_data = await orchestrator.run_pipeline(target_dir)
     results = pipeline_data["results"]
@@ -59,6 +68,12 @@ async def main():
         print(f"    • Post-Fix Status: {fix.final_test_status}")
         print(f"    • Verifier Acceptance: {'✅ ACCEPTED' if ver.is_accepted else '❌ REJECTED'} (Score: {ver.security_score}/100)")
         print(f"    • Generated PR Title: {fix.pr_title}")
+
+        # Optional automated Git Branch & PR creation
+        if args.create_pr and ver.is_accepted:
+            pr_res = PullRequestCreator.create_pr_for_fix(fix, ver, repo_dir=current_dir)
+            print(f"    • Git Branch & PR: {pr_res.message}")
+
         print("-" * 70)
 
     Logger.step("⚡ BENCHMARK METRICS")
