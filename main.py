@@ -3,7 +3,8 @@ main.py - Self-Healing Bug Hunter Main CLI Entry Point
 
 This file triggers the 4-agent asynchronous pipeline (Scout, Reproducer, Fixer, Verifier) 
 and executes autonomous bug discovery, reproduction, fixing, and auditing.
-Supports multi-language detection, AST static security analysis, iterative repair, and automated PR creation.
+Supports multi-language detection, AST static security analysis, iterative repair, 
+automated PR creation, and real-time Web Dashboard.
 """
 
 import os
@@ -32,7 +33,15 @@ async def main():
     parser.add_argument("--export-benchmark", action="store_true", default=True, help="Save benchmark metrics report")
     parser.add_argument("--create-pr", action="store_true", default=False, help="Autonomously create git branch and Pull Request for verified patches")
     parser.add_argument("--max-repair-attempts", type=int, default=3, help="Maximum iterative repair attempts per bug")
+    parser.add_argument("--dashboard", action="store_true", default=False, help="Launch interactive real-time Web Dashboard")
+    parser.add_argument("--port", type=int, default=8080, help="Port for Web Dashboard (default: 8080)")
     args = parser.parse_args()
+
+    # Launch Web Dashboard if requested
+    if args.dashboard:
+        from dashboard import start_dashboard
+        start_dashboard(args.port)
+        return
 
     current_dir = os.path.dirname(os.path.abspath(__file__))
     target_dir = args.target_dir or os.path.join(current_dir, "sample_target")

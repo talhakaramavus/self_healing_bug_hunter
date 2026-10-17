@@ -2,7 +2,7 @@
 test_bug_hunter.py - Self-Healing Bug Hunter Test Suite
 
 This module tests the core data models, tools, report exporters,
-static analyzer, multi-language detection, and PR creator.
+static analyzer, multi-language detection, PR creator, and Dashboard state.
 """
 
 import os
@@ -18,6 +18,7 @@ from reporter import BugReporter
 from static_analyzer import StaticAnalyzer
 from multi_language import MultiLanguageManager, LanguageConfig
 from pr_creator import PullRequestCreator
+from dashboard import DASHBOARD_STATE, load_initial_reports
 
 def test_data_models():
     """Tests instantiation of core dataclass models."""
@@ -98,3 +99,12 @@ def test_pr_creator_skipped_when_unaccepted():
     res = PullRequestCreator.create_pr_for_fix(fix, ver)
     assert res.status == "SKIPPED"
     assert res.commit_sha is None
+
+def test_dashboard_state_loading():
+    """Tests that dashboard initializes state and metrics correctly."""
+    load_initial_reports()
+    assert isinstance(DASHBOARD_STATE, dict)
+    assert "metrics" in DASHBOARD_STATE
+    assert "results" in DASHBOARD_STATE
+    assert "is_running" in DASHBOARD_STATE
+    assert DASHBOARD_STATE["is_running"] is False
