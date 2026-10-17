@@ -7,7 +7,18 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Architecture: 4--Agent](https://img.shields.io/badge/Architecture-4--Agent-orange.svg)](#-1-agent-architecture--role-distribution)
 
-**Self-Healing Bug Hunter** is an open-source **4-agent autonomous software maintenance system** built on top of the official `google-genai` Python SDK (`gemini-2.5-flash`). It detects logic errors, memory/resource leaks, type mismatches, and security flaws in Python codebases, writes failing `pytest` unit tests, patches code, and audits patches under strict scope boundary and security isolation rules (Agentix Labs methodology).
+**Self-Healing Bug Hunter** is an open-source **4-agent autonomous software maintenance system** built on top of the official `google-genai` Python SDK (`gemini-2.5-flash`). It detects logic errors, memory/resource leaks, type mismatches, and security flaws, writes failing unit tests, patches code via an **adaptive iterative repair loop**, and audits patches under strict scope boundary and security isolation rules (Agentix Labs methodology).
+
+---
+
+## 🌟 Key Capabilities
+
+- **🔍 Hybrid Static + AI Scanning:** Combines deterministic AST parsing (`static_analyzer.py`) with Google GenAI LLM inspection for 100% reliable flaw detection.
+- **🔁 Adaptive Iterative Multi-Repair Loop:** Automatically retries failed patches up to 3 times using diagnostic feedback from test suites and Verifier audits.
+- **🛡️ Sandbox Security & Scope Isolation:** Verifier Agent blocks patches that touch files outside the bug scope or introduce dangerous calls (`eval`, `exec`, privilege escalation).
+- **🌐 Multi-Language Codebase Support:** Detects and executes tests for Python (`pytest`), JavaScript/TypeScript (`jest`/`npm`), and Go (`go test`).
+- **🤖 Autonomous GitHub Pull Request Creator:** Automatically creates dedicated git branches and creates GitHub Pull Requests for verified fixes (`--create-pr`).
+- **📊 Quantitative Empirical Benchmark:** Automatically computes True-Positives, False Alarms, Acceptance Rate %, Time-to-Fix latency, and Token Cost ($ USD).
 
 ---
 
@@ -17,9 +28,9 @@ The system operates across an asynchronous (`async/await`) 4-agent pipeline:
 
 | Agent | Role | Responsibilities |
 | :--- | :--- | :--- |
-| **🔍 Scout Agent** | Codebase Scanner | Scans target codebase to discover logic flaws, resource leaks, and type mismatches. Generates `BugReport`. |
-| **🧪 Reproducer Agent** | Test Generator | Applies Test-Driven Development (TDD) by generating a dedicated `pytest` unit test that **FAILS** against the current codebase (`TestReproduction`). |
-| **🛠️ Fixer Agent** | Code Patcher | Patches the source code and verifies that the reproduction test suite runs **PASS** (`FixResult`). |
+| **🔍 Scout Agent** | Codebase Scanner | Scans target codebase using hybrid AST static analysis + GenAI to discover logic flaws, resource leaks, and type mismatches. Generates `BugReport`. |
+| **🧪 Reproducer Agent** | Test Generator | Applies Test-Driven Development (TDD) by generating a dedicated unit test that **FAILS** against the current codebase (`TestReproduction`). |
+| **🛠️ Fixer Agent** | Code Patcher | Patches the source code via an adaptive feedback loop (up to 3 attempts) and verifies reproduction tests run **PASS** (`FixResult`). |
 | **🛡️ Verifier Agent** | Security & Scope Validator | Audits patches in an isolated sandbox. Enforces scope boundary isolation (rejects modifications outside bug target), checks permission expansion (`eval`/`exec`), and validates coverage (`VerificationResult`). |
 
 ---
@@ -28,15 +39,16 @@ The system operates across an asynchronous (`async/await`) 4-agent pipeline:
 
 ```mermaid
 graph TD
-    A["Target Codebase Directory"] --> B["🔍 Scout Agent"]
+    A["Target Codebase Directory"] --> B["🔍 Scout Agent (Hybrid AST + AI)"]
     B -- "BugReport (JSON/Dataclass)" --> C["🧪 Reproducer Agent"]
     C -- "Write Failing Test" --> D{"Pytest Run (Initial)"}
-    D -- "FAILED (Verified Bug)" --> E["🛠️ Fixer Agent"]
+    D -- "FAILED (Verified Bug)" --> E["🛠️ Fixer Agent (Iterative Patching)"]
     D -- "PASSED (Unverified)" --> C
     E -- "Apply Source Patch" --> F{"Pytest Run (Verification)"}
     F -- "PASSED (Fixed!)" --> G["🛡️ Verifier Agent (Sandbox & Scope Audit)"]
     G -- "ACCEPTED (Scope Isolated & Safe)" --> H["🚀 Benchmark Metrics & Export Reports"]
     G -- "REJECTED (Dangerous/Scope Leak)" --> E
+    H -- "Optional (--create-pr)" --> I["🤖 Pull Request Creator (Git Branch & PR)"]
 ```
 
 ---
@@ -71,7 +83,14 @@ export GEMINI_API_KEY="AIzaSy_YOUR_API_KEY_HERE"
 
 ### Run Pipeline
 ```bash
+# Standard 4-agent pipeline
 python main.py
+
+# Autonomous bug hunt with automated Git Branch & Pull Request creation
+python main.py --create-pr
+
+# Target a specific external codebase
+python main.py --target-dir "C:/path/to/your/project"
 ```
 
 ---

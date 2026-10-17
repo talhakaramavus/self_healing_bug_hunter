@@ -1,7 +1,8 @@
 """
 test_bug_hunter.py - Self-Healing Bug Hunter Test Suite
 
-This module tests the core data models, tools, and report exporters.
+This module tests the core data models, tools, report exporters,
+static analyzer, multi-language detection, and PR creator.
 """
 
 import os
@@ -14,6 +15,9 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")
 from config import BugReport, TestReproduction, FixResult, VerificationResult
 from tools import read_file, write_file, get_python_files
 from reporter import BugReporter
+from static_analyzer import StaticAnalyzer
+from multi_language import MultiLanguageManager, LanguageConfig
+from pr_creator import PullRequestCreator
 
 def test_data_models():
     """Tests instantiation of core dataclass models."""
@@ -58,3 +62,39 @@ def test_reporter_export(tmp_path):
     assert os.path.exists(json_path)
     assert os.path.exists(md_path)
     assert os.path.exists(html_path)
+
+def test_static_analyzer(tmp_path):
+    """Tests AST static analyzer for dangerous calls and zero divisions."""
+    buggy_code = """
+def bad_func():
+    eval("1 + 1")
+    return 10 / 0
+"""
+    code_file = tmp_path / "unsafe.py"
+    write_file(str(code_file), buggy_code)
+
+    issues = StaticAnalyzer.analyze_file(str(code_file))
+    assert len(issues) >= 2
+    types = [i["bug_type"] for i in issues]
+    assert "Security" in types
+    assert "Logic" in types
+
+def test_multi_language_detection(tmp_path):
+    """Tests codebase multi-language detection across python, javascript, and go."""
+    write_file(str(tmp_path / "service.py"), "print('hello')")
+    write_file(str(tmp_path / "app.ts"), "const x: number = 42;")
+    write_file(str(tmp_path / "main.go"), "package main")
+
+    langs = MultiLanguageManager.detect_project_languages(str(tmp_path))
+    assert LanguageConfig.PYTHON in langs
+    assert LanguageConfig.TYPESCRIPT in langs
+    assert LanguageConfig.GO in langs
+
+def test_pr_creator_skipped_when_unaccepted():
+    """Tests PR creator skips unaccepted patches."""
+    fix = FixResult("BUG-02", "app.py", "patch", "FAILED", "fix: title", "body")
+    ver = VerificationResult("BUG-02", False, 30, False, True, "FAILED", "Scope leak detected")
+    
+    res = PullRequestCreator.create_pr_for_fix(fix, ver)
+    assert res.status == "SKIPPED"
+    assert res.commit_sha is None
