@@ -17,6 +17,9 @@
 - **🔍 Hybrid Static + AI Scanning:** Combines deterministic AST parsing (`static_analyzer.py`) with Google GenAI LLM inspection for 100% reliable flaw detection.
 - **🔁 Adaptive Iterative Multi-Repair Loop:** Automatically retries failed patches up to 3 times using diagnostic feedback from test suites and Verifier audits.
 - **🛡️ Sandbox Security & Scope Isolation:** Verifier Agent blocks patches that touch files outside the bug scope or introduce dangerous calls (`eval`, `exec`, privilege escalation).
+- **🔙 Safe Rollback & Snapshot System:** Backs up files before modification (`snapshot_manager.py`). If repairs fail or get rejected by Verifier, the pristine state is automatically restored.
+- **🧹 Cyclomatic Complexity & Refactoring Scout:** Computes McCabe complexity via AST (`complexity_analyzer.py`) to highlight and refactor deeply nested logic.
+- **🪝 Git Pre-Commit Hook Protection:** Installs local pre-commit hooks (`hook_manager.py`) to prevent committing unverified bugs or dangerous code.
 - **📊 Real-time Interactive Web Dashboard:** Built-in zero-dependency web interface (`dashboard.py`) to monitor agent stages, trigger hunts, and inspect live metrics.
 - **🌐 Multi-Language Codebase Support:** Detects and executes tests for Python (`pytest`), JavaScript/TypeScript (`jest`/`npm`), and Go (`go test`).
 - **🤖 Autonomous GitHub Pull Request Creator:** Automatically creates dedicated git branches and creates GitHub Pull Requests for verified fixes (`--create-pr`).
@@ -94,6 +97,15 @@ python main.py --create-pr
 
 # Target a specific external codebase
 python main.py --target-dir "C:/path/to/your/project"
+
+# Install Git pre-commit hook into current repository
+python main.py --install-hook
+
+# Uninstall Git pre-commit hook
+python main.py --uninstall-hook
+
+# Fast pre-commit check (checks staged codebase for critical AST security/logic flaws)
+python main.py --pre-commit
 ```
 
 ---

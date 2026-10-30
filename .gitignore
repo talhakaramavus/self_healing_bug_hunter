@@ -31,3 +31,4 @@ ENV/
 # Dynamically generated reproduction test files
 sample_target/test_reproduce_*.py
 sample_target/sample_data.txt
+.hunter_snapshots/

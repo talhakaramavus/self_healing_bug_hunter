@@ -22,6 +22,9 @@ from benchmark import BugHunterBenchmark
 from logger import Logger
 from multi_language import MultiLanguageManager
 from pr_creator import PullRequestCreator
+from hook_manager import HookManager
+from static_analyzer import StaticAnalyzer
+from complexity_analyzer import ComplexityAnalyzer
 
 async def main():
     """
@@ -35,15 +38,57 @@ async def main():
     parser.add_argument("--max-repair-attempts", type=int, default=3, help="Maximum iterative repair attempts per bug")
     parser.add_argument("--dashboard", action="store_true", default=False, help="Launch interactive real-time Web Dashboard")
     parser.add_argument("--port", type=int, default=8080, help="Port for Web Dashboard (default: 8080)")
+    parser.add_argument("--install-hook", action="store_true", default=False, help="Install Git pre-commit hook")
+    parser.add_argument("--uninstall-hook", action="store_true", default=False, help="Uninstall Git pre-commit hook")
+    parser.add_argument("--pre-commit", action="store_true", default=False, help="Fast pre-commit check mode for git hook")
     args = parser.parse_args()
+
+    current_dir = os.path.dirname(os.path.abspath(__file__))
+
+    # Handle Git Hook commands
+    if args.install_hook:
+        ok, msg = HookManager.install_pre_commit_hook(current_dir)
+        if ok:
+            Logger.success(msg)
+        else:
+            Logger.error(msg)
+        return
+
+    if args.uninstall_hook:
+        ok, msg = HookManager.uninstall_pre_commit_hook(current_dir)
+        if ok:
+            Logger.success(msg)
+        else:
+            Logger.error(msg)
+        return
+
+    # Handle Fast Pre-Commit Validation Mode
+    if args.pre_commit:
+        target_dir = args.target_dir or current_dir
+        Logger.info(f"Running fast pre-commit check on: {target_dir}")
+        critical_issues = 0
+        for root, _, files in os.walk(target_dir):
+            if ".git" in root or ".hunter_snapshots" in root:
+                continue
+            for f in files:
+                if f.endswith(".py") and not f.startswith("test_") and not f.startswith("__"):
+                    fpath = os.path.join(root, f)
+                    sec_issues = StaticAnalyzer.analyze_file(fpath)
+                    for issue in sec_issues:
+                        if issue.get("severity") == "HIGH":
+                            Logger.error(f"{issue['title']} in {fpath}: {issue['description']}")
+                            critical_issues += 1
+        if critical_issues > 0:
+            Logger.error(f"Pre-commit check failed: {critical_issues} critical issue(s) detected.")
+            sys.exit(1)
+        Logger.success("Pre-commit check passed: Codebase is clean of critical AST flaws.")
+        return
 
     # Launch Web Dashboard if requested
     if args.dashboard:
         from dashboard import start_dashboard
         start_dashboard(args.port)
         return
-
-    current_dir = os.path.dirname(os.path.abspath(__file__))
     target_dir = args.target_dir or os.path.join(current_dir, "sample_target")
 
     sample_data_file = os.path.join(target_dir, "sample_data.txt")

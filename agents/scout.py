@@ -15,6 +15,7 @@ from google.genai import types
 from config import SCOUT_AGENT_PROMPT, DEFAULT_MODEL, BugReport, get_genai_client
 from tools import read_file
 from static_analyzer import StaticAnalyzer
+from complexity_analyzer import ComplexityAnalyzer
 
 class ScoutAgent:
     """
@@ -59,8 +60,20 @@ class ScoutAgent:
                         severity=item["severity"],
                         suggested_reproduction=item["suggested_reproduction"]
                     ))
+
+                complexity_findings = ComplexityAnalyzer.analyze_file(file_path)
+                for item in complexity_findings:
+                    ast_reports.append(BugReport(
+                        bug_id=item["bug_id"],
+                        file_path=item["file_path"],
+                        title=item["title"],
+                        description=item["description"],
+                        bug_type=item["bug_type"],
+                        severity=item["severity"],
+                        suggested_reproduction=item["suggested_reproduction"]
+                    ))
             except Exception as e:
-                print(f"⚠️ [Scout Agent] Static analysis notice for {file_path}: {e}")
+                print(f"⚠️ [Scout Agent] Static/Complexity analysis notice for {file_path}: {e}")
 
         # 2. Source Code Reading for LLM Analysis
         code_contents = {}

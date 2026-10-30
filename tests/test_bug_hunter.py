@@ -19,6 +19,9 @@ from static_analyzer import StaticAnalyzer
 from multi_language import MultiLanguageManager, LanguageConfig
 from pr_creator import PullRequestCreator
 from dashboard import DASHBOARD_STATE, load_initial_reports
+from snapshot_manager import SnapshotManager
+from complexity_analyzer import ComplexityAnalyzer
+from hook_manager import HookManager
 
 def test_data_models():
     """Tests instantiation of core dataclass models."""
@@ -108,3 +111,64 @@ def test_dashboard_state_loading():
     assert "results" in DASHBOARD_STATE
     assert "is_running" in DASHBOARD_STATE
     assert DASHBOARD_STATE["is_running"] is False
+
+def test_snapshot_manager(tmp_path):
+    """Tests snapshot creation, file modification, and safe rollback."""
+    test_file = tmp_path / "code.py"
+    original_content = "def calculate(): return 42\n"
+    write_file(str(test_file), original_content)
+
+    mgr = SnapshotManager(base_dir=str(tmp_path))
+    snap_id = mgr.create_snapshot([str(test_file)])
+
+    # Modify file
+    write_file(str(test_file), "def calculate(): return 'corrupted'\n")
+    assert read_file(str(test_file)) != original_content
+
+    # Roll back
+    success = mgr.restore_snapshot(snap_id)
+    assert success is True
+    assert read_file(str(test_file)) == original_content
+
+    # Cleanup
+    mgr.cleanup_snapshot(snap_id)
+
+def test_complexity_analyzer(tmp_path):
+    """Tests detection of functions with cyclomatic complexity exceeding threshold."""
+    complex_code = """
+def nested_branches(x):
+    if x > 1:
+        if x > 2:
+            if x > 3:
+                for i in range(x):
+                    while i > 0:
+                        if i == 5:
+                            return True
+                        elif i == 6:
+                            return False
+    return None
+"""
+    test_file = tmp_path / "complex.py"
+    write_file(str(test_file), complex_code)
+
+    issues = ComplexityAnalyzer.analyze_file(str(test_file), threshold=5)
+    assert len(issues) >= 1
+    assert issues[0]["bug_type"] == "Complexity"
+    assert "Score:" in issues[0]["title"]
+
+def test_hook_manager(tmp_path):
+    """Tests installation and uninstallation of git pre-commit hook."""
+    git_dir = tmp_path / ".git"
+    git_dir.mkdir()
+
+    # Install hook
+    ok, msg = HookManager.install_pre_commit_hook(str(tmp_path))
+    assert ok is True
+    hook_file = tmp_path / ".git" / "hooks" / "pre-commit"
+    assert hook_file.exists()
+    assert "Self-Healing Bug Hunter" in hook_file.read_text(encoding="utf-8")
+
+    # Uninstall hook
+    ok, msg = HookManager.uninstall_pre_commit_hook(str(tmp_path))
+    assert ok is True
+    assert not hook_file.exists()
